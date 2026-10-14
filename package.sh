@@ -57,10 +57,10 @@ cp $ammoniabuildfolder/./Build/ammonia $ammoniabuildfolder/temp/ammonia/core/
 cp $ammoniabuildfolder/./Build/liblibinfect.dylib $ammoniabuildfolder/temp/ammonia/core/
 cp $ammoniabuildfolder/./Build/libopener.dylib $ammoniabuildfolder/temp/ammonia/core/
 
-chmod 777 "$ammoniabuildfolder/temp/ammonia/core/tweaks"
+chmod 755 "$ammoniabuildfolder/temp/ammonia/core/tweaks"
 
 mkdir $ammoniabuildfolder/temp/ammonia/core/gui
-chmod 777 "$ammoniabuildfolder/temp/ammonia/core/gui"
+chmod 755 "$ammoniabuildfolder/temp/ammonia/core/gui"
 
 # Build the package
 sudo pkgbuild --install-location /private/var/ --root $ammoniabuildfolder/temp --scripts ./scripts --identifier net.bedtime.ammonia "$ammoniabuildfolder/ammonia.pkg"

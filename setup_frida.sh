@@ -10,7 +10,7 @@ if test -f "frida-gum-x86_64.xz"; then
     echo frida-gum-x86_64.xz already exists, skipping...
 else
     echo Downloading frida-gum-x86_64.xz...
-    curl -L --output frida-gum-x86_64.xz https://github.com/frida/frida/releases/download/$FRIDA_VERSION/frida-gum-devkit-$FRIDA_VERSION-macos-x86_64.tar.xz
+    curl -k -L --output frida-gum-x86_64.xz https://github.com/frida/frida/releases/download/$FRIDA_VERSION/frida-gum-devkit-$FRIDA_VERSION-macos-x86_64.tar.xz
 fi
 
 # Download and extract arm64e frida-gum library
@@ -18,7 +18,7 @@ if test -f "frida-gum-arm64e.xz"; then
     echo frida-gum-arm64e.xz already exists, skipping...
 else
     echo Downloading frida-gum-arm64e.xz...
-    curl -L --output frida-gum-arm64e.xz https://github.com/frida/frida/releases/download/$FRIDA_VERSION/frida-gum-devkit-$FRIDA_VERSION-macos-arm64e.tar.xz
+    curl -k -L --output frida-gum-arm64e.xz https://github.com/frida/frida/releases/download/$FRIDA_VERSION/frida-gum-devkit-$FRIDA_VERSION-macos-arm64e.tar.xz
 fi
 
 # Download and extract arm64 frida-gum library
@@ -26,7 +26,7 @@ if test -f "frida-gum-arm64.xz"; then
     echo frida-gum-arm64.xz already exists, skipping...
 else
     echo Downloading frida-gum-arm64.xz...
-    curl -L --output frida-gum-arm64.xz https://github.com/frida/frida/releases/download/$FRIDA_VERSION/frida-gum-devkit-$FRIDA_VERSION-macos-arm64.tar.xz
+    curl -k -L --output frida-gum-arm64.xz https://github.com/frida/frida/releases/download/$FRIDA_VERSION/frida-gum-devkit-$FRIDA_VERSION-macos-arm64.tar.xz
 fi
 
 # Extract x86_64 libfrida-gum.a

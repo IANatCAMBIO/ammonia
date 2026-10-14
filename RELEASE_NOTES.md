@@ -65,6 +65,47 @@ the fix.
    *Fix:* resolve both targets first, install each hook only when found, and log
    when an export is missing.
 
+### Fixed (second pass — hardening)
+
+10. **`posix_spawnp` routed through `posix_spawn`, breaking PATH search** —
+    `libinfect/libinfect.m`
+    `SpawnPNew()` called `SpawnNew()`, which invoked the saved original
+    `posix_spawn`. `posix_spawn` requires a full path, so a `posix_spawnp` of a
+    bare filename (e.g. `"ls"`) lost its `$PATH` resolution.
+    *Fix:* capture a separate original pointer `SpawnPOld` when hooking
+    `posix_spawnp`, factor the environment construction into a shared
+    `build_spawn_env()`, and call `SpawnPOld` from the `posix_spawnp` path.
+
+11. **Blacklist/whitelist matching was substring-based and mis-parsed lines** —
+    `libinfect/libinfect.m`, `opener/opener.m`, `ammonia.h`
+    `is_path_blacklisted()` (libinfect) and the tweak whitelist/blacklist loops
+    (opener) used `strstr` substring matching, so `"Mail"` also matched
+    `"MailChimp"` / any path containing the text. The opener loops also stripped
+    only a trailing `\n` (not `\r`, so CRLF files broke) and did not skip empty
+    lines — an empty line made `strstr` match *every* process, silently
+    whitelisting or blacklisting everything.
+    *Fix:* added a shared `ammonia_name_matches()` in `ammonia.h` that matches
+    the whole executable name (full path or basename); opener now trims CR/LF
+    via `chomp_line()` and skips empty lines.
+    *Behaviour change:* match-list entries are now whole names, not fragments —
+    path-fragment entries that relied on substring matching must be updated to a
+    full path or the executable's basename.
+
+12. **Log file in world-writable `/tmp` (symlink-attack target)** —
+    `libinfect/libinfect.m`
+    `LogToFile()` wrote to `/tmp/infect.log` from a root context; any local user
+    could pre-create that path as a symlink and redirect a privileged write.
+    *Fix:* log to `SupportFolderP "infect.log"` (root-owned support folder) and
+    open with `O_NOFOLLOW` so a symlinked final component is refused.
+
+13. **World-writable load directories** — `package.sh`
+    The installer created `tweaks/` and `gui/` as `chmod 777`, letting any local
+    user drop a dylib that gets loaded into other processes (local privilege
+    escalation).
+    *Fix:* `package.sh` now creates both as `0755` (root-writable only).
+    **Operators with an existing install must also tighten the live dirs:**
+    `sudo chmod 755 /private/var/ammonia/core/tweaks /private/var/ammonia/core/gui`
+
 ### Security posture notes (unchanged — by design, flagged for operators)
 
 These are inherent to how Ammonia operates and were **not** modified, but
@@ -75,6 +116,3 @@ operators should be aware:
   barriers to loading unsigned code into signed Apple processes.
 - The LaunchDaemon runs as **root** and injects into **launchd (pid 1)** — the
   maximum blast radius if a tweak misbehaves.
-- `package.sh` sets `tweaks/` and `gui/` to `chmod 777` (world-writable).
-  Consider root-owned `0755` unless user-writable tweak drop is required, since
-  world-writable load directories are a local privilege-escalation surface.

@@ -20,7 +20,23 @@ const char *GetExePath(void) {
     return executablePath;
 }
 
-void Open(void * interceptor) { 
+/*
+ * chomp_line — strip trailing CR and LF characters from a line in place.
+ *
+ * Inputs:
+ *   s — NUL-terminated string (must not be NULL)
+ *
+ * Output:
+ *   none; s is truncated at the first trailing CR/LF run.
+ */
+static void chomp_line(char *s) {
+    size_t len = strlen(s);
+    while (len > 0 && (s[len - 1] == '\n' || s[len - 1] == '\r')) {
+        s[--len] = '\0';
+    }
+}
+
+void Open(void * interceptor) {
     DIR *dr;
     struct dirent *en;
     dr = opendir(SupportFolderP "tweaks/"); // Open the directory
@@ -45,12 +61,12 @@ void Open(void * interceptor) {
                 if (whitelist_fp) {
                     char process_name[256];
                     while (fgets(process_name, sizeof(process_name), whitelist_fp) != NULL) {
-                        size_t len = strlen(process_name);
-                        if (len > 0 && process_name[len - 1] == '\n') {
-                            process_name[len - 1] = '\0';
+                        chomp_line(process_name);
+                        if (process_name[0] == '\0') {
+                            continue; // skip empty lines
                         }
 
-                        if (strstr(exe_path, process_name) != NULL) {
+                        if (ammonia_name_matches(exe_path, process_name)) {
                             should_load = true;
                             break;
                         }
@@ -68,12 +84,12 @@ void Open(void * interceptor) {
                         should_load = true;
                         char process_name[256];
                         while (fgets(process_name, sizeof(process_name), blacklist_fp) != NULL) {
-                            size_t len = strlen(process_name);
-                            if (len > 0 && process_name[len - 1] == '\n') {
-                                process_name[len - 1] = '\0';
+                            chomp_line(process_name);
+                            if (process_name[0] == '\0') {
+                                continue; // skip empty lines
                             }
 
-                            if (strstr(exe_path, process_name) != NULL) {
+                            if (ammonia_name_matches(exe_path, process_name)) {
                                 should_load = false;
                                 syslog(LOG_INFO, "Process %s is blacklisted for %s.", exe_path, en->d_name);
                                 break;
