@@ -72,23 +72,43 @@ int posix_spawnattr_get_darwin_role_np(const posix_spawnattr_t *__restrict attr,
 #define PRIO_DARWIN_ROLE_UI 0x2           /* On  screen UI,  focal unknown */
 #define PRIO_DARWIN_ROLE_UI_NON_FOCAL 0x4 /* On  screen, non-focal UI */
 
-/* --- ammonia.blacklist storage --- */
+/* --- match-list storage (ammonia.blacklist / ammonia.allowlist) --- */
 static char **ammonia_blacklist = NULL;
 static size_t ammonia_blacklist_count = 0;
+static char **ammonia_allowlist = NULL;
+static size_t ammonia_allowlist_count = 0;
+static bool ammonia_allowlist_active = false;
 
-/* load ammonia.blacklist (substring-match style like opener.c) */
-static void load_ammonia_blacklist(void) {
+/*
+ * load_name_list — read a newline-delimited name list from the support folder.
+ *
+ * Lines are trimmed of surrounding whitespace and CR/LF; blank lines and lines
+ * beginning with '#' are ignored. Each remaining line is stored verbatim for
+ * whole-name matching by ammonia_name_matches().
+ *
+ * Inputs:
+ *   filename  — leaf name under SupportFolderP (e.g. "ammonia.blacklist")
+ *   out_list  — receives the malloc'd array of entries (caller retains it)
+ *   out_count — receives the number of entries
+ *
+ * Output:
+ *   true if the file existed and was opened (even with no usable entries),
+ *   false if it was absent or its path overflowed. On an allocation failure the
+ *   partial list built so far is kept.
+ */
+static bool load_name_list(const char *filename, char ***out_list,
+                           size_t *out_count) {
   char pathbuf[PATH_MAX];
-  if (snprintf(pathbuf, sizeof(pathbuf), "%s%s", SupportFolderP,
-               "ammonia.blacklist") >= (int)sizeof(pathbuf)) {
-    LogToFile("ammonia: blacklist path overflow\n");
-    return;
+  if (snprintf(pathbuf, sizeof(pathbuf), "%s%s", SupportFolderP, filename) >=
+      (int)sizeof(pathbuf)) {
+    LogToFile("ammonia: %s path overflow\n", filename);
+    return false;
   }
 
   FILE *f = fopen(pathbuf, "r");
   if (!f) {
-    // blacklist optional; silently continue
-    return;
+    // list optional; silently continue
+    return false;
   }
 
   char *line = NULL;
@@ -96,7 +116,7 @@ static void load_ammonia_blacklist(void) {
   ssize_t read;
 
   while ((read = getline(&line, &len, f)) != -1) {
-    // strip newline(s)
+    // strip trailing newline(s)
     while (read > 0 && (line[read - 1] == '\n' || line[read - 1] == '\r')) {
       line[--read] = '\0';
     }
@@ -120,26 +140,36 @@ static void load_ammonia_blacklist(void) {
     if (!entry)
       continue;
 
-    char **tmp = realloc(ammonia_blacklist,
-                         (ammonia_blacklist_count + 1) * sizeof(char *));
+    char **tmp = realloc(*out_list, (*out_count + 1) * sizeof(char *));
     if (!tmp) {
       free(entry);
       continue;
     }
-    ammonia_blacklist = tmp;
-    ammonia_blacklist[ammonia_blacklist_count++] = entry;
+    *out_list = tmp;
+    (*out_list)[(*out_count)++] = entry;
   }
 
   free(line);
   fclose(f);
+  return true;
 }
 
-/* returns true if `path` should be considered blacklisted (whole-name match) */
-static bool is_path_blacklisted(const char *path) {
-  if (!path || ammonia_blacklist_count == 0)
+/*
+ * list_contains_path — whole-name membership test against a loaded name list.
+ *
+ * Inputs:
+ *   list  — array of trimmed entries (may be NULL)
+ *   count — number of entries
+ *   path  — executable path being tested (may be NULL)
+ *
+ * Output:
+ *   true if any entry matches `path` via ammonia_name_matches(); else false.
+ */
+static bool list_contains_path(char **list, size_t count, const char *path) {
+  if (!path || count == 0)
     return false;
-  for (size_t i = 0; i < ammonia_blacklist_count; ++i) {
-    if (ammonia_name_matches(path, ammonia_blacklist[i])) {
+  for (size_t i = 0; i < count; ++i) {
+    if (ammonia_name_matches(path, list[i])) {
       return true;
     }
   }
@@ -174,16 +204,29 @@ static char **build_spawn_env(const char *path, const posix_spawnattr_t *ab,
 
   if (strcmp(path, "/System/Library/CoreServices/loginwindow.app/Contents/"
                    "MacOS/loginwindow") == 0) {
-    inject_opener = true;
+    // loginwindow drives the logout fix; in allowlist mode it must be listed
+    // explicitly like any other target.
+    inject_opener =
+        ammonia_allowlist_active
+            ? list_contains_path(ammonia_allowlist, ammonia_allowlist_count,
+                                  path)
+            : true;
   } else if (strcmp(path, "/usr/libexec/xpcproxy") == 0) {
     envbuf_setenv(&playground, "DYLD_INSERT_LIBRARIES",
                   SupportFolderP "liblibinfect.dylib");
     return playground;
   } else if (!PathDriver(path)) {
-    if (darwin_rolep == PRIO_DARWIN_ROLE_UI_FOCAL ||
-        darwin_rolep == PRIO_DARWIN_ROLE_UI ||
-        darwin_rolep == PRIO_DARWIN_ROLE_UI_NON_FOCAL) {
-      if (!is_path_blacklisted(path)) {
+    if (ammonia_allowlist_active) {
+      // Default-deny: inject only into explicitly allowlisted executables,
+      // regardless of darwin role.
+      inject_opener =
+          list_contains_path(ammonia_allowlist, ammonia_allowlist_count, path);
+    } else if (darwin_rolep == PRIO_DARWIN_ROLE_UI_FOCAL ||
+               darwin_rolep == PRIO_DARWIN_ROLE_UI ||
+               darwin_rolep == PRIO_DARWIN_ROLE_UI_NON_FOCAL) {
+      // Legacy mode: inject into GUI-role apps unless blacklisted.
+      if (!list_contains_path(ammonia_blacklist, ammonia_blacklist_count,
+                              path)) {
         inject_opener = true;
       }
     }
@@ -233,7 +276,10 @@ int SpawnPNew(pid_t *restrict pid, const char *restrict path,
 }
 
 void __attribute__((constructor)) Infect(void) {
-  load_ammonia_blacklist();
+  load_name_list("ammonia.blacklist", &ammonia_blacklist,
+                 &ammonia_blacklist_count);
+  ammonia_allowlist_active = load_name_list(
+      "ammonia.allowlist", &ammonia_allowlist, &ammonia_allowlist_count);
 
   gum_init_embedded();
   GumInterceptor *interceptor = gum_interceptor_obtain();

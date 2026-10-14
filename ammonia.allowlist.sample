@@ -1,0 +1,28 @@
+# ammonia.allowlist (sample)
+#
+# Install as: /private/var/ammonia/core/ammonia.allowlist
+#
+# PRESENCE of this file switches ammonia into strict default-deny mode:
+# libopener (the component that loads and runs tweaks) is injected ONLY into
+# executables listed below. Every other process — GUI apps and headless
+# daemons alike — runs untouched. Remove the file to return to the default
+# role-based behaviour (all GUI-role apps unless ammonia.blacklist excludes
+# them).
+#
+# Notes:
+#   - One entry per line. Blank lines and lines starting with '#' are ignored.
+#     Inline comments are NOT supported — a '#' after an entry becomes part of
+#     the entry. Put comments on their own line.
+#   - Matching is on the WHOLE executable name: either the full path, or the
+#     final path component (basename). "Safari" matches
+#     /Applications/Safari.app/Contents/MacOS/Safari but not "SafariServices".
+#   - An empty/all-comment file means deny everything (nothing is injected).
+#   - The lightweight spawn hook (liblibinfect) still loads into launchd and
+#     xpcproxy regardless; it runs no tweak code. Only libopener is gated here.
+#   - If you rely on the logout fix, you MUST list loginwindow explicitly:
+#       /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow
+#
+# Examples (delete and replace with your own):
+# /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow
+# Finder
+# Safari

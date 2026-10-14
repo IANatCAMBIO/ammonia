@@ -106,6 +106,23 @@ the fix.
     **Operators with an existing install must also tighten the live dirs:**
     `sudo chmod 755 /private/var/ammonia/core/tweaks /private/var/ammonia/core/gui`
 
+### Added — opt-in default-deny injection allowlist
+
+14. **`ammonia.allowlist` (strict allowlist mode)** — `libinfect/libinfect.m`,
+    `ammonia.allowlist.sample`
+    New optional file `/private/var/ammonia/core/ammonia.allowlist`. When
+    present, ammonia only injects the tweak loader (`libopener`) into
+    executables whose whole name (full path or basename) is listed — a
+    default-deny model that collapses the injection surface to a named set, so
+    GUI apps and headless daemons that are not listed are never touched. When
+    absent, behaviour is unchanged (GUI-role apps unless `ammonia.blacklist`
+    excludes them), so existing installs are unaffected until the file is
+    created. The inert `liblibinfect` spawn hook still loads into `launchd`/
+    `xpcproxy` as before (it runs no tweak code). `loginwindow` is matched like
+    any other entry, so logout-fix users must list it. The list loader and
+    matcher are shared with `ammonia.blacklist` (`load_name_list` /
+    `list_contains_path`). See `ammonia.allowlist.sample`.
+
 ### Security posture notes (unchanged — by design, flagged for operators)
 
 These are inherent to how Ammonia operates and were **not** modified, but

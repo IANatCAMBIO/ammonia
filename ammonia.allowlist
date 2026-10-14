@@ -1,0 +1,29 @@
+# ammonia.allowlist — strict default-deny injection list.
+#
+# Presence of this file (installed at /private/var/ammonia/core/ammonia.allowlist)
+# restricts tweak injection (libopener) to ONLY the executables named below.
+# One entry per line; '#' comments must be on their own line (inline comments
+# are NOT stripped). Matching is on the whole executable name: full path, or the
+# final path component (basename). See ammonia.allowlist.sample for the rules.
+
+# --- Apple apps ---
+Finder
+Calendar
+Mail
+Messages
+
+# Notes: basename intentionally matches BOTH Apple Notes and your own Notes.app
+# (they share the executable name "Notes").
+Notes
+
+# --- Third-party apps ---
+# Firefox's main executable is lowercase 'firefox' (helper processes differ).
+firefox
+MacVim
+
+# --- Your AppKit apps ---
+Files
+
+# --- Logout fix (this fork's purpose) ---
+# Required for the loginwindow logout fix under allowlist mode.
+/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow
