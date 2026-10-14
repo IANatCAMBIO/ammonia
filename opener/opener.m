@@ -101,6 +101,7 @@ void Open(void * interceptor) {
                 }
 
             cleanup:
+                free((void *)exe_path);
                 continue;
             }
         }
@@ -109,26 +110,6 @@ void Open(void * interceptor) {
         syslog(LOG_ERR, "Error opening tweaks directory.");
     }
     closelog();
-}
-
-int IsForegroundProcess()
-{
-    task_t currentTask = mach_task_self();
-    task_category_policy_data_t category_policy;
-    mach_msg_type_number_t task_info_count = TASK_CATEGORY_POLICY_COUNT;
-    boolean_t get_default = FALSE;
-    kern_return_t result = task_policy_get(currentTask, TASK_CATEGORY_POLICY, (task_policy_t)&category_policy, &task_info_count, &get_default);
-    
-    if (result != KERN_SUCCESS)
-    {
-        fprintf(stderr, "Error getting task category policy: %s\n", mach_error_string(result));
-        return -1; // or handle the error appropriately
-    }
-
-    return !(category_policy.role & TASK_BACKGROUND_APPLICATION) ||
-           !(category_policy.role & TASK_FOREGROUND_APPLICATION) ||
-    //       !(category_policy.role & TASK_UNSPECIFIED) || // a gamble
-           !(category_policy.role & TASK_DEFAULT_APPLICATION);
 }
 
 static bool gum_loaded = false;
@@ -149,8 +130,18 @@ typedef bool (*GumInterceptorRevertFunc_t)(void *interceptor,
 void __attribute__((constructor)) ctor_main(void) {
     // Make frida interceptor availible to tweaks
     void *hooking = dlopen("/private/var/ammonia/core/fridagum.dylib", RTLD_NOW | RTLD_GLOBAL);
+    if (hooking == NULL) {
+        syslog(LOG_ERR, "ammonia opener: failed to load fridagum.dylib: %s", dlerror());
+        return;
+    }
+
     GumInitEmbeddedFunc_t GumInitEmbeddedFunc = dlsym(hooking, "gum_init_embedded");
     GumInterceptorObtainFunc_t GumInterceptorObtainFunc = dlsym(hooking, "gum_interceptor_obtain");
+    if (GumInitEmbeddedFunc == NULL || GumInterceptorObtainFunc == NULL) {
+        syslog(LOG_ERR, "ammonia opener: missing frida-gum symbols; aborting tweak load");
+        return;
+    }
+
     if (!gum_loaded) {
         GumInitEmbeddedFunc();
         gum_loaded = true;

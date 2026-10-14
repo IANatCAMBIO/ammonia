@@ -162,8 +162,8 @@ int SpawnNew(pid_t *pid, const char *path, const posix_spawn_file_actions_t *ac,
       if (!is_path_blacklisted(path)) {
 
       SkipGuiCheck:
-        // skip adding opener for this path
-        LogToFile("ammonia: skipping opener for blacklisted path '%s'\n", path);
+        // inject the opener into this GUI path
+        LogToFile("ammonia: injecting opener for path '%s'\n", path);
         // we are GUI
 
         char *newlib = SupportFolderP "libopener.dylib";
@@ -183,11 +183,13 @@ int SpawnNew(pid_t *pid, const char *path, const posix_spawn_file_actions_t *ac,
       }
 
       int k = SpawnOld(pid, path, ac, ab, __argv, (char *const *)playground);
+      envbuf_free(playground);
       return k;
     }
   }
 
   int k = SpawnOld(pid, path, ac, ab, __argv, (char *const *)playground);
+  envbuf_free(playground);
   return k;
 }
 
@@ -204,13 +206,25 @@ void __attribute__((constructor)) Infect(void) {
   gum_init_embedded();
   GumInterceptor *interceptor = gum_interceptor_obtain();
   gum_interceptor_begin_transaction(interceptor);
-  gum_interceptor_replace(
-      interceptor,
-      (gpointer)gum_module_find_export_by_name(NULL, "posix_spawn"),
-      (gpointer)SpawnNew, NULL, (gpointer *)&SpawnOld);
-  gum_interceptor_replace(
-      interceptor,
-      (gpointer)gum_module_find_export_by_name(NULL, "posix_spawnp"),
-      (gpointer)SpawnPNew, NULL, (gpointer *)(NULL));
+
+  gpointer spawn_target =
+      (gpointer)gum_module_find_export_by_name(NULL, "posix_spawn");
+  gpointer spawnp_target =
+      (gpointer)gum_module_find_export_by_name(NULL, "posix_spawnp");
+
+  if (spawn_target) {
+    gum_interceptor_replace(interceptor, spawn_target, (gpointer)SpawnNew, NULL,
+                            (gpointer *)&SpawnOld);
+  } else {
+    LogToFile("ammonia: could not find posix_spawn export; hook skipped\n");
+  }
+
+  if (spawnp_target) {
+    gum_interceptor_replace(interceptor, spawnp_target, (gpointer)SpawnPNew,
+                            NULL, (gpointer *)(NULL));
+  } else {
+    LogToFile("ammonia: could not find posix_spawnp export; hook skipped\n");
+  }
+
   gum_interceptor_end_transaction(interceptor);
 }
