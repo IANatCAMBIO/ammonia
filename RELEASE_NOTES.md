@@ -67,14 +67,18 @@ the fix.
 
 ### Fixed (second pass — hardening)
 
-10. **`posix_spawnp` routed through `posix_spawn`, breaking PATH search** —
+10. **Environment construction shared between the spawn hooks** —
     `libinfect/libinfect.m`
-    `SpawnPNew()` called `SpawnNew()`, which invoked the saved original
-    `posix_spawn`. `posix_spawn` requires a full path, so a `posix_spawnp` of a
-    bare filename (e.g. `"ls"`) lost its `$PATH` resolution.
-    *Fix:* capture a separate original pointer `SpawnPOld` when hooking
-    `posix_spawnp`, factor the environment construction into a shared
-    `build_spawn_env()`, and call `SpawnPOld` from the `posix_spawnp` path.
+    The per-spawn environment build (role check, opener/liblibinfect injection)
+    is factored into a shared `build_spawn_env()` used by `SpawnNew()`.
+    *Note:* an earlier revision of this item also made `SpawnPNew()` call the
+    real `posix_spawnp` (via a saved `SpawnPOld`) to preserve `$PATH` resolution
+    for bare-filename spawns. That was reverted: Apple's `posix_spawnp`
+    internally calls `posix_spawn`, whose prologue Gum has patched, so the hook
+    re-entered itself and built the environment twice per PATH-searched spawn —
+    which hung injected GUI apps at boot and stalled pointer-event delivery
+    (dead mouse/trackpad). `SpawnPNew()` now delegates to `SpawnNew()` as
+    upstream does; the bare-filename PATH limitation is accepted.
 
 11. **Blacklist/whitelist matching was substring-based and mis-parsed lines** —
     `libinfect/libinfect.m`, `opener/opener.m`, `ammonia.h`

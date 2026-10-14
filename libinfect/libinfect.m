@@ -59,11 +59,6 @@ int (*SpawnOld)(pid_t *pid, const char *path,
                 const posix_spawnattr_t *ab, char *const __argv[],
                 char *const __envp[]);
 
-int (*SpawnPOld)(pid_t *pid, const char *file,
-                 const posix_spawn_file_actions_t *ac,
-                 const posix_spawnattr_t *ab, char *const __argv[],
-                 char *const __envp[]);
-
 bool PathDriver(const char *path) { return (strstr(path, "Driver") != NULL); }
 
 int posix_spawnattr_get_darwin_role_np(const posix_spawnattr_t *__restrict attr,
@@ -267,12 +262,12 @@ int SpawnPNew(pid_t *restrict pid, const char *restrict path,
               const posix_spawn_file_actions_t *ac,
               const posix_spawnattr_t *restrict ab, char *const *restrict argv,
               char *const *restrict envp) {
-  // Call the original posix_spawnp (not posix_spawn) so its PATH search for a
-  // bare filename is preserved.
-  char **playground = build_spawn_env(path, ab, (char *const *)envp);
-  int k = SpawnPOld(pid, path, ac, ab, argv, (char *const *)playground);
-  envbuf_free(playground);
-  return k;
+  // Route through SpawnNew (the posix_spawn hook), which calls the real
+  // posix_spawn. Do NOT call the real posix_spawnp here: Apple's posix_spawnp
+  // internally calls posix_spawn, whose prologue Gum has patched, so invoking
+  // it would re-enter this interceptor and rebuild the environment twice for
+  // every PATH-searched spawn. Single-pass delegation matches upstream.
+  return SpawnNew(pid, path, ac, ab, argv, envp);
 }
 
 void __attribute__((constructor)) Infect(void) {
@@ -299,7 +294,7 @@ void __attribute__((constructor)) Infect(void) {
 
   if (spawnp_target) {
     gum_interceptor_replace(interceptor, spawnp_target, (gpointer)SpawnPNew,
-                            NULL, (gpointer *)&SpawnPOld);
+                            NULL, NULL);
   } else {
     LogToFile("ammonia: could not find posix_spawnp export; hook skipped\n");
   }
