@@ -11,6 +11,7 @@ Finder
 Calendar
 Mail
 Messages
+Terminal
 
 # Notes: basename intentionally matches BOTH Apple Notes and your own Notes.app
 # (they share the executable name "Notes").
