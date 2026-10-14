@@ -46,11 +46,18 @@ echo "backing up $CORE -> $BACKUP"
 cp -a "$CORE" "$BACKUP"
 
 # 2. Install the new binaries (fridagum.dylib and ammonia.blacklist untouched).
+#    Each file is written under a temporary name and renamed into place, so it
+#    gets a new inode. Overwriting in place (plain cp) rewrites the file that
+#    launchd already has mapped: the kernel keeps the code signature it
+#    validated for that vnode, the new bytes no longer match it, and every
+#    xpcproxy spawn that loads liblibinfect.dylib then fails with launchd
+#    error 162 ("Codesigning issue") — no app can launch until reboot.
 for f in $FILES; do
     echo "installing $f"
-    cp "$SRC_DIR/$f" "$CORE/$f"
-    chown root:wheel "$CORE/$f"
-    chmod 755 "$CORE/$f"
+    cp "$SRC_DIR/$f" "$CORE/$f.new"
+    chown root:wheel "$CORE/$f.new"
+    chmod 755 "$CORE/$f.new"
+    mv -f "$CORE/$f.new" "$CORE/$f"
 done
 
 # 3. Seed match-list config only if absent — never clobber a live copy.
