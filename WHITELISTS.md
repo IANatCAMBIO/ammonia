@@ -60,6 +60,10 @@ Both layers compare an entry to a process using the same function,
   different apps ship an executable with the same basename, one entry matches
   **both**. Example in this install: `Notes` matches both Apple's Notes and the
   user's own `Notes.app` because they share the executable name `Notes`.
+- An **app-translocated** app has no stable path: Gatekeeper runs it from a
+  per-launch `/private/var/folders/.../AppTranslocation/<uuid>/d/<App>.app`
+  directory, so only a basename entry can ever match it. `MacPass` is the
+  example in this install. Never give a translocated app a full-path entry.
 
 ## Parser quirks — the two layers do NOT parse identically
 
@@ -143,9 +147,60 @@ non-whitelisted apps carry nothing.
   `Notes`), which should be called out in a comment in the *global* allowlist
   (where comments are honoured), not the per-tweak file.
 
+## Temporarily disabling a tweak
+
+A tweak with **neither** sidecar is skipped entirely (`opener/opener.m:103`),
+so renaming its match-list out of the way disables it without touching the
+dylib or the daemon:
+
+```sh
+cd /private/var/ammonia/core/tweaks
+sudo mv ClassicTitlebar.dylib.whitelist ClassicTitlebar.dylib.whitelist.off
+```
+
+Relaunch an app and it comes up clean; rename the sidecar back and relaunch to
+restore. Sidecars are read per process launch, so this takes effect on the next
+launch with no daemon restart, and `ammonia` is a one-shot `RunAtLoad` job
+anyway (`KeepAlive` is false) — there is no resident process to signal.
+
+Two things to keep in mind:
+
+- Processes **already running** keep whatever was injected at their launch.
+  Only new launches see the change, in either direction.
+- Every app launched while the sidecar is off also comes up untweaked, and
+  needs its own relaunch after the sidecar goes back.
+
+Renaming to `.off` is deliberate: any suffix works as long as the result is
+neither `.whitelist` nor `.blacklist`, but a tweak left with no sidecar at all
+is indistinguishable from one that was never configured.
+
 ## Last verified
 
-2026-10-19 — three tweaks installed (`ClassicTitlebar.dylib`,
-`firefox_titlebar.dylib`, `liquid_glass_off.dylib`); role-based Layer-1 mode (no
-`ammonia.allowlist` installed in `core/`); all live injection matched the
-per-tweak whitelists with no over-injection, verified via `vmmap`.
+2026-11-02 — three tweaks installed (`ClassicTitlebar.dylib`,
+`firefox_titlebar.dylib`, `liquid_glass_off.dylib`), each with a
+`.dylib.whitelist` and no `.dylib.blacklist`; role-based Layer-1 mode, as no
+`ammonia.allowlist` is installed in `core/`. Live injection was read with
+`lsof` on each tweak dylib and matched the per-tweak whitelists exactly, with
+no over-injection: `ClassicTitlebar` and `liquid_glass_off` in Calendar,
+Claude, Files (x2), MacPass, Mail, Notes (x2), Slack, Tasks and Terminal;
+`firefox_titlebar` in firefox alone. Whitelisted apps that were not running
+(Messages, Reminders, Activity Monitor, Connections, Finder) carried nothing,
+as expected.
+
+The two `Notes` processes are the documented basename collision — Apple's
+Notes and `~/Applications/Notes.app` share the executable name — and both are
+intended targets here.
+
+The sidecar-rename disable path above was exercised end to end on the same
+date: all three sidecars renamed to `.off`, Apple Notes relaunched clean, then
+renamed back and relaunched to confirm both tweaks loaded into the new process.
+
+`ammonia.allowlist` in this repo was reconciled with the installed whitelists
+on the same date. It had drifted: `Activity Monitor`, `Claude`, `Connections`,
+`MacPass`, `Reminders`, `Slack` and `Tasks` were all missing, so enabling
+strict mode would have silently denied injection into seven apps that both
+window-chrome tweaks target. `MacVim` was dropped — it was there for the
+`apple_sharpener` tweak, which is no longer installed. Since the allowlist is
+not installed in `core/`, none of this was active, but the file is the thing
+you copy into place to turn strict mode on, so it has to be right before that
+is a safe thing to do.

@@ -5,13 +5,20 @@
 # One entry per line; '#' comments must be on their own line (inline comments
 # are NOT stripped). Matching is on the whole executable name: full path, or the
 # final path component (basename). See ammonia.allowlist.sample for the rules.
+#
+# This list is the union of every installed tweak's own whitelist, plus
+# loginwindow for the logout fix. A name here only permits injection; the
+# per-tweak whitelist still decides which tweak actually loads. Keep the two
+# in sync — a name missing here is denied before any tweak whitelist is read.
 
 # --- Apple apps ---
 Finder
 Calendar
 Mail
 Messages
+Reminders
 Terminal
+Activity Monitor
 
 # Notes: basename intentionally matches BOTH Apple Notes and your own Notes.app
 # (they share the executable name "Notes").
@@ -20,10 +27,17 @@ Notes
 # --- Third-party apps ---
 # Firefox's main executable is lowercase 'firefox' (helper processes differ).
 firefox
-MacVim
+Slack
+Claude
+# MacPass runs app-translocated, from a per-launch
+# /private/var/folders/.../AppTranslocation/<uuid>/d/MacPass.app path, so only
+# the basename can match it. Never give a translocated app a full-path entry.
+MacPass
 
-# --- Your AppKit apps ---
+# --- Your AppKit apps (~/Applications) ---
 Files
+Tasks
+Connections
 
 # --- Logout fix (this fork's purpose) ---
 # Required for the loginwindow logout fix under allowlist mode.
